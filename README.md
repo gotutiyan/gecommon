@@ -283,4 +283,13 @@ WO        :  0.3975 ->  0.3881 (-0.0094)
 
 Plot performances for each of `labels` as a bar plot.
 
+```python
+from gecommon import Comparison
+gec = Comparison.from_demo()
+gec.plot_etype_comparison(
+    labels=['baseline', 'ours'],
+    key='f05'
+)
+```
+
 ![sample_etype_plot](fig/out.png)
