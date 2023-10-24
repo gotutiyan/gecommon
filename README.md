@@ -9,6 +9,10 @@ cd gecommon
 pip install -e .
 ```
 
+# Features
+- [Parallel](https://github.com/gotutiyan/gecommon#gecommonparallel): A class to do some operations with parallel data. E.g. make error detection labels, generate corrupt references.
+- [Comparison](https://github.com/gotutiyan/gecommon#gecommoncomparison): A class to compare evaluation results of ERRANT.
+
 # Usage
 
 # gecommon.Parallel
@@ -89,7 +93,7 @@ VERB:SVA        1 33.33
 
 ### `ged_labels_sent()`
 
-Outputs sentence-level error detection labels.
+Output sentence-level error detection labels.
 
 `1` means the source is incorrect, `0` means correct.
 ```python
@@ -100,9 +104,9 @@ print(gec.ged_labels_sent())
 ```
 
 ### `ged_labels_token()`
-Outputs token-level error detection labels by ERRANT's alignments.
+Output token-level error detection labels by ERRANT's alignments.
 
-`1` means the source is incorrect, `0` means correct.
+`1` means the token is incorrect, `0` means correct.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
@@ -112,10 +116,10 @@ print(gec.ged_labels_token())
 
 ### `generate_corrected_srcs(n: int=1, return_labels: bool=False)`
 
-Outputs corrected sentences applied `n` corrections to source sentences. This means the number of output sentences is ${}_N C_n$ for each source-target pair. If $N=n$, the outputs will be identical to the target sentence.  
-Note that the outputs will be flatten.
+For each source--target pair, output the full set of correction sentences applying a subset of the $n$ corrections to the source. That is, if there are $N$ edits in total, ${}_N C_n$ sentences are generated for each pair.  
+The output is returned as a one-dimensional list with no pair boundaries.
 
-It also returns the error types of the applied edit if `return_labels=True`.
+If `return_labels=True` is specified, labels are also returned to indicate which error type correction was applied.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
@@ -130,10 +134,10 @@ print(gec.generate_corrected_srcs(n=2, return_labels=True))
 ```
 
 ### `def generate_corrupted_refs(self, n: int=1, return_labels: bool=False):`
-Outputs a reference sentences missing `n` corrections for each of examples. This means the number of output sentences is ${}_N C_n$ for each source-target pair. If $N=n$, the outputs will be identical to the source sentence.  
-Note that the outputs will be flatten.
+For each source--target pair, output the full set of corrections that do not apply a subset of the $n$ corrections from the reference. That is, if there are $N$ edits in total, ${}_N C_n$ sentences are generated for each pair.  
+The output is returned as a one-dimensional list with no pair boundaries.
 
-It also returns the error types of the missing edit if `return_labels=True`.
+If `return_labels=True` is specified, labels are also returned to indicate which error types were excluded.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
