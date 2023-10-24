@@ -1,6 +1,13 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "gecommon"
 version = "0.1"
+authors = [
+    {name = "Takumi Goto"},
+]
 description = "A common toolkit for Grammatical Error Correction"
 license = {file = "LICENSE"}
 readme = "README.md"
@@ -11,4 +18,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "gecommon"}
+packages = ["gecommon"]
