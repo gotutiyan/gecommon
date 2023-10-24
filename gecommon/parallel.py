@@ -18,13 +18,13 @@ class Edit:
         self.type = type
 
     def is_insert(self):
-        return self.type.startswith('M')
+        return self.o_start == self.o_end
     
     def is_delete(self):
-        return self.type.startswith('U')
+        return self.c_str == ''
 
     def is_replace(self):
-        return self.type.startswith('R')
+        return not self.is_delete() and self.o_start != self.o_end
 
     def __str__(self):
         return f'Edit({self.o_start}, {self.o_end}, {self.c_str}, {self.type})'
@@ -259,7 +259,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             else:
                 tokens[s_idx:e_idx] = e.c_str.split(' ')
                 offset += len(e.c_str.split(' ')) - (e.o_end - e.o_start)
-        trg = ' '.join(tokens).replace(' $DELETE', '').replace('$DELETE ', '')
+        trg = ' '.join(tokens).replace(' $DELETE', '').replace('$DELETE ', '').replace('$DELETE', '')
         return trg
 
     def ged_labels_sent(self) -> List[int]:
