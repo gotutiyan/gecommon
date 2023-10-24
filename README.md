@@ -2,9 +2,11 @@
 
 This is a common toolkit for Grammatical Error Correction (GEC).
 
-You can install it by:
+Install by:
 ```
-pip install 
+git clone https://github.com/gotutiyan/gecommon.git
+cd gecommon
+pip install -e .
 ```
 
 # Usage
@@ -13,40 +15,55 @@ pip install
 
 `Parallel` contains processing when paralle data is used.
 
-### `from_parallel()`, `from_m2()`
+### `from_parallel(src: str=None, trg: str=None) -> Parallel`
 
-Load parallel data from file(s) and make an instance.
+Load dataset from parallel. Both `src=` and `trg=` are file paths.
 ```python
 from gecommon import Parallel
-
 gec = Parallel.from_parallel(
     src=<a src file path>,
     trg=<a trg file path>
 )
-# Or,
-gec = Parallel.from_m2(
-    m2=<a m2 file path>
-)
+```
 
-# For demo,
+### `from_m2(m2: str=None, ref_id: int=0)`
+
+Load dataset from M2 format. Currently, `Parallel` cannot treat multiple references.
+
+```python
+from gecommon import Parallel
+gec = Parallel.from_m2(
+    m2=<a m2 file path>,
+    ref_id=0
+)
+```
+
+### `from_demo()`
+
+Load demo data. This is to understand how to use (and is for debugging).
+```python
+from gecommon import Parallel
 gec = Parallel.from_demo()
-'''The demo is based on:
-S This are gramamtical sentence .
+
+# The above uses the examples based on one in the ERRANT's offical page.
+# https://github.com/chrisjbryant/errant
+'''S This are gramamtical sentence .
 A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0
 A 2 2|||M:DET|||a|||REQUIRED|||-NONE-|||0
 A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 S This are gramamtical sentence .
+A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 '''
 ```
 
 ### `show_stats(cat3: bool=False)`
-Show statistics of data dataset e.g. number of sentence or word error rate.
+Show statistics of dataset. E.g. the number of sentence, the word error rate.
 
-Also show combined error types such as `R:NOUN` if `cat3 = True`.
+Also show combined error types such as `R:NOUN` if `cat3=True`.
 
 ```python
 from gecommon import Parallel
@@ -70,10 +87,11 @@ VERB:SVA        1 33.33
 '''
 ```
 
-
 ### `ged_labels_sent()`
 
-Outputs sentence-level detection labels.
+Outputs sentence-level error detection labels.
+
+`1` means the source is incorrect, `0` means correct.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
@@ -82,7 +100,9 @@ print(gec.ged_labels_sent())
 ```
 
 ### `ged_labels_token()`
-Outputs token-lavel error detection labels.
+Outputs token-level error detection labels by ERRANT's alignments.
+
+`1` means the source is incorrect, `0` means correct.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
@@ -90,27 +110,12 @@ print(gec.ged_labels_token())
 # [[0, 1, 1, 0, 0], [0, 0, 0, 0, 0]]
 ```
 
-### `show_etype_stats()`
-
-Show statistics of error types.
-```python
-from gecommon import Parallel
-gec = Parallel.from_demo()
-print(gec.show_etype_stats())
-'''
-Error type Freq   Ratio
-DET             1 33.33
-SPELL           1 33.33
-VERB:SVA        1 33.33
-'''
-```
-
 ### `generate_corrected_srcs(n: int=1, return_labels: bool=False)`
 
-Outputs a corrected sentences applied `n` corrections for each.  
-The number of output sentences is ${}_N C_n$ where $N$ is the number of edits. 
+Outputs corrected sentences applied `n` corrections to source sentences. This means the number of output sentences is ${}_N C_n$ for each source-target pair. If $N=n$, the outputs will be identical to the target sentence.  
+Note that the outputs will be flatten.
 
-Returns corrected error type labels if `return_labels=True`.
+It also returns the error types of the applied edit if `return_labels=True`.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
@@ -119,13 +124,16 @@ print(gec.generate_corrected_srcs(n=1))
 
 print(gec.generate_corrected_srcs(n=1, return_labels=True))
 # (['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .'], [['R:VERB:SVA'], ['M:DET'], ['R:SPELL']])
+
+print(gec.generate_corrected_srcs(n=2, return_labels=True))
+# (['This is a gramamtical sentence .', 'This is grammatical sentence .', 'This are a grammatical sentence .'], [['R:VERB:SVA', 'M:DET'], ['R:VERB:SVA', 'R:SPELL'], ['M:DET', 'R:SPELL']])
 ```
 
 ### `def generate_corrupted_refs(self, n: int=1, return_labels: bool=False):`
-Outputs a reference sentences missing `n` corrections for each.  
-The number of output sentences is ${}_N C_n$ for each reference, where $N$ is the number of edits. 
+Outputs a reference sentences missing `n` corrections for each of examples. This means the number of output sentences is ${}_N C_n$ for each source-target pair. If $N=n$, the outputs will be identical to the source sentence.  
+Note that the outputs will be flatten.
 
-Returns missing error type labels if `return_labels=True`.
+It also returns the error types of the missing edit if `return_labels=True`.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
@@ -134,6 +142,9 @@ print(gec.generate_corrupted_refs(n=1))
 
 print(gec.generate_corrupted_refs(n=1, return_labels=True))
 # (['This are a grammatical sentence .', 'This is grammatical sentence .', 'This is a gramamtical sentence .'], [['R:VERB:SVA'], ['M:DET'], ['R:SPELL']])
+
+print(gec.generate_corrupted_refs(n=2, return_labels=True))
+# (['This are grammatical sentence .', 'This are a gramamtical sentence .', 'This is gramamtical sentence .'], [['R:VERB:SVA', 'M:DET'], ['R:VERB:SVA', 'R:SPELL'], ['R:SPELL', 'M:DET']])
 ```
 
 # gecommon.Comparison
@@ -209,10 +220,20 @@ TP      FP      FN      Prec    Rec     F0.5
 2394    1853    5067    0.5637  0.3209  0.4896
 ==============================================
 '''
-gec = Edit.from_errant_format(
+from gecommon import Comparison
+gec = Comparison.from_errant_format(
     scores=[baseline, ours],
     labels=['baseline', 'ours']
 )
+```
+
+### `from_demo()`
+
+Load the above exmaple.
+
+```python
+from gecommon import Comparison
+gec = Comparison.from_demo()
 ```
 
 ### `compare(label1: str=None, label2: str=None, key: str='f05')`
@@ -230,7 +251,7 @@ Precision: 0.5385 -> 0.5637
 Recall   : 0.2840 -> 0.3209
 F0.5     : 0.4567 -> 0.4896
 
-=== Error type (key = f) ===
+=== Error type (key = f05) ===
 ADJ       :  0.1698 ->  0.1993 (+0.0295)
 ADJ:FORM  :   0.625 ->  0.7955 (+0.1705)
 ADV       :  0.1429 ->  0.2605 (+0.1176)
