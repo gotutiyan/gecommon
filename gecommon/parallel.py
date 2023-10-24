@@ -36,25 +36,26 @@ class Parallel:
     def __init__(
         self,
         m2: List[str] = None,
+        ref_id: int = 0,
         srcs: List[str] = None,
         trgs: List[str] = None
     ):
         self.srcs, self.trgs, self.edits_list = None, None, None
         if m2 is not None:
-            self.srcs, self.trgs, self.edits_list = self.load_m2(m2)
+            self.srcs, self.trgs, self.edits_list = self.load_m2(m2, ref_id)
         elif srcs is not None and trgs is not None:
             self.srcs, self.trgs, self.edits_list = self.load_parallel(srcs, trgs)
 
         assert self.srcs is not None and self.edits_list is not None
 
     @classmethod
-    def from_m2(cls, m2: str):
+    def from_m2(cls, m2: str, ref_id: int=0):
         '''
         Input
             m2: Input file path of M2
         '''
         m2 = open(m2).read().rstrip().split('\n\n')
-        return cls(m2=m2)
+        return cls(m2=m2, ref_id=ref_id)
 
     @classmethod
     def from_demo(cls):
@@ -67,6 +68,7 @@ A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 S This are gramamtical sentence .
+A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 '''.rstrip().split('\n\n')
@@ -80,8 +82,9 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
     def load_m2(
         self,
-        m2_contents
-    ) -> Union[List[str], List[List[Edit]]]:
+        m2_contents: List[str],
+        ref_id: int=0
+    ) -> Tuple[List[str], List[str], List[List[Edit]]]:
         srcs: List[str] = []
         trgs: List[str] = [] 
         edits_list: List[List[Edit]] = []
@@ -94,7 +97,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             src = src[2:]  # remove 'S '
             edits = [
                 self.make_edit_instance(e[2:]) for e in edits \
-                if not e.startswith('A -1')  # remove noop errors
+                if not e.startswith('A -1') and int(e.split('|||')[-1]) == ref_id
             ]
             srcs.append(src)
             trgs.append(self.apply_edits(src, edits))
@@ -128,7 +131,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         self,
         srcs: List[str],
         trgs: List[str]
-    ) -> Union[List[str], List[List[Edit]]]:
+    ) -> Tuple[List[str], List[str], List[List[Edit]]]:
         annotator = errant.load('en')
         edits_list = []
         num_error_sent = 0
@@ -164,7 +167,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             type=edit.type
         )
     
-    def show_stats(self, cat3=False):
+    def show_stats(self, cat3: bool=False) -> None:
         print('Number of sents:', self.num_sents)
         print('Number of words:', self.num_words)
         print('Number of edits:', self.num_edits)
@@ -178,7 +181,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             print('=== Cat3 ===')
             self.show_etype_stats(cat=3)
 
-    def show_etype_stats(self, cat=2):
+    def show_etype_stats(self, cat: int=2) -> None:
         def show(cat, num_edits):
             cat2freq = Counter(cat)
             print(f'{"Error type":10} {"Freq":6} Ratio')
@@ -201,18 +204,11 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         else:
             show(cat3, num_edits)
     
-    def generate_corrupted_refs(self, n=1, return_labels: bool=False):
-        ''' Generate corrupted references that is missed only one or more edits for each.
-        E.g.
-        S a b c
-        A 0 1|||dummy|||d ... # replace
-        B 1 1|||dummy|||||| ... # delete
-        C 2 2|||dummy|||e ... # inseting
-        
-        Using above example,
-        The completely reference is "d c e" but this function returns
-        ["a c e", "d b c e", "d c"].
-        '''
+    def generate_corrupted_refs(
+        self,
+        n: int=1,
+        return_labels: bool=False
+    ) -> Union[Tuple[List[str], List[List[str]]], List[str]]:
         references = []
         labels = []
         for src, edits in zip(self.srcs, self.edits_list):
@@ -228,7 +224,11 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         else:
             return references
     
-    def generate_corrected_srcs(self, n=1, return_labels: bool=False):
+    def generate_corrected_srcs(
+        self,
+        n=1,
+        return_labels: bool=False
+    ) -> Union[Tuple[List[str], List[List[str]]], List[str]]:
         corrected = []
         labels = []
         for src, edits in zip(self.srcs, self.edits_list):
@@ -242,7 +242,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             return corrected
 
     @staticmethod
-    def apply_edits(src: str, edits: List[Edit]):
+    def apply_edits(src: str, edits: List[Edit]) -> str:
         offset = 0
         tokens = src.split(' ')
         for e in edits:
@@ -262,7 +262,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         trg = ' '.join(tokens).replace(' $DELETE', '').replace('$DELETE ', '')
         return trg
 
-    def ged_labels_sent(self):
+    def ged_labels_sent(self) -> List[int]:
         labels = []
         for s, t in zip(self.srcs, self.trgs):
             if s == t:
@@ -271,7 +271,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
                 labels.append(1)
         return labels
 
-    def ged_labels_token(self):
+    def ged_labels_token(self) -> List[List[int]]:
         labels = []
         for s, edits in zip(self.srcs, self.edits_list):
             label = [0] * len(s.split(' '))

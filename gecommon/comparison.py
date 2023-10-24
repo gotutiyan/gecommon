@@ -17,7 +17,7 @@ class SystemPerformance:
     etype: Dict[str, Performance] = None
 
 class Comparison:
-    def __init__(self, scores, labels):
+    def __init__(self, scores: List[str]=[], labels: List[str]=[]):
         self.system_performances: Dict[str, SystemPerformance] = dict()
         for string, label in zip(scores, labels):
             self.register_sys_performance(string.strip(), label)
@@ -31,18 +31,20 @@ class Comparison:
         return len(self.get_sorted_etype())
     
     @classmethod
-    def from_errant_format(cls, scores, labels=None):
+    def from_errant_format(cls, scores: List[str], labels: str=None):
+        assert type(scores) == list
+        assert len(scores) == len(labels)
         if labels is None:
             labels = [f'LABEL{i}' for i in range(len(scores))]
         assert len(scores) == len(labels)
         return cls(scores, labels)
 
-    def register_sys_performance(self, scores: str, label: str):
+    def register_sys_performance(self, scores: str, label: str) -> None:
         sys_performance = self.load_errant_format(scores)
         self.system_performances[label] = sys_performance
 
     @staticmethod
-    def load_errant_format(data_str):
+    def load_errant_format(data_str: str) -> SystemPerformance:
         data = data_str.rstrip().split('\n')
         type_score = dict()
         for d in data:
@@ -80,7 +82,7 @@ class Comparison:
             etype=type_score
         )
         
-    def compare(self, label1: str=None, label2: str=None, key: str='f05'):
+    def compare(self, label1: str=None, label2: str=None, key: str='f05') -> None:
         per1: SystemPerformance = self.system_performances[label1]
         per2: SystemPerformance = self.system_performances[label2]
         print('=== Overall ===')
@@ -99,13 +101,18 @@ class Comparison:
                 diff = str(round(diff, 4))
             print(f'{t:10}: {t_per1.__dict__[key]:7} -> {t_per2.__dict__[key]:7} ({diff:7})')
 
-    def load_etype_scores(self, label: str=None, key='f05'):
+    def load_etype_scores(self, label: str=None, key='f05') -> Dict[str, Union[int, float]]:
         return {
             etype: self.system_performances[label].etype[etype].__dict__[key] \
             for etype in self.get_sorted_etype()
         }
 
-    def plot_etype_comparison(self, labels: List[str]=None, key='f05', outpath='out.png'):
+    def plot_etype_comparison(
+        self,
+        labels: List[str]=None,
+        key='f05',
+        outpath='out.png'
+    ) -> None:
         import matplotlib.pyplot as plt
         colors = 'gbrcmy'
         fig = plt.figure(figsize=(12, 4))
@@ -122,7 +129,8 @@ class Comparison:
         ax.yaxis.grid(linestyle='--', alpha=0.4)
         ax.set_xlabel('Error types')
         ax.set_ylabel(key)
-        ax.set_xticks([x - width/len(labels) for x in np.arange(0.5+width*i, self.n_etypes+width*i+0.5, 1)])
+        ax.set_xticks([x - width/len(labels) \
+                       for x in np.arange(0.5+width*i, self.n_etypes+width*i+0.5, 1)])
         ax.set_xticklabels(list(self.get_sorted_etype()), rotation=60)
         plt.tight_layout()
         plt.savefig(outpath)
