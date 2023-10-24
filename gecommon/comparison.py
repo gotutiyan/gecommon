@@ -114,23 +114,22 @@ class Comparison:
         outpath='out.png'
     ) -> None:
         import matplotlib.pyplot as plt
-        colors = 'gbrcmy'
         fig = plt.figure(figsize=(12, 4))
         ax = fig.add_subplot(111)
         width = 0.7 / len(labels)
         for i in range(len(labels)):
-            x = np.arange(0.5+width*i, self.n_etypes+width*i+0.5, 1)
+            x = np.arange(width*i, self.n_etypes+width*i, 1)
             y = [
                 self.system_performances[labels[i]].etype[etype].__dict__[key] \
                 for etype in self.get_sorted_etype()
             ]
-            plt.bar(x, y, color=colors[i], width=width, label=labels[i], align='center')
+            plt.bar(x, y, width=width, label=labels[i], align='center')
         ax.legend(loc=2)
         ax.yaxis.grid(linestyle='--', alpha=0.4)
         ax.set_xlabel('Error types')
         ax.set_ylabel(key)
         ax.set_xticks([x - width/len(labels) \
-                       for x in np.arange(0.5+width*i, self.n_etypes+width*i+0.5, 1)])
+                       for x in np.arange(width*i, self.n_etypes+width*i, 1)])
         ax.set_xticklabels(list(self.get_sorted_etype()), rotation=60)
         plt.tight_layout()
         plt.savefig(outpath)
