@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from collections import Counter
 import itertools
 import errant
+from tqdm import tqdm
 
 class Edit:
     def __init__(
@@ -41,6 +42,7 @@ class Parallel:
         trgs: List[str] = None
     ):
         self.srcs, self.trgs, self.edits_list = None, None, None
+        self.GED_MODES = ['bin', 'cat1', 'cat2', 'cat3']
         if m2 is not None:
             self.srcs, self.trgs, self.edits_list = self.load_m2(m2, ref_id)
         elif srcs is not None and trgs is not None:
@@ -62,6 +64,12 @@ class Parallel:
         # Cited ERRANT official page for the following example.
         # https://github.com/chrisjbryant/errant
         m2 = '''S This are gramamtical sentence .
+A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0
+A 2 2|||M:DET|||a|||REQUIRED|||-NONE-|||0
+A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
+A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
+
+S This are gramamtical sentence .
 A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0
 A 2 2|||M:DET|||a|||REQUIRED|||-NONE-|||0
 A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
@@ -138,10 +146,10 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         num_words = 0
         num_edits = 0
         num_corrected_token = 0
-        for src, trg in zip(srcs, trgs):
+        for src, trg in tqdm(zip(srcs, trgs), total=len(srcs)):
             orig = annotator.parse(src)
             cor = annotator.parse(trg)
-            edits = annotator.annorate(orig, cor)
+            edits = annotator.annotate(orig, cor)
             edits = [self.convert_my_edit(e) for e in edits]
             edits_list.append(edits)
             num_words += len(src.split(' '))
@@ -208,38 +216,55 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         self,
         n: int=1,
         return_labels: bool=False
-    ) -> Union[Tuple[List[str], List[List[str]]], List[str]]:
-        references = []
-        labels = []
+    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[str]]:
+        '''
+        Returns
+            refs_list: List[List[str]], the size is (# of sources, # of currupted references).
+                Note that the second dimension is different depending on sources.
+
+            labels_list: List[List[List[str]]], the size is (# of sources, # of currupted references, # of labels)
+                Note that the second dimension is different depending on sources.
+                And the third dimension is the same as n.
+        '''
+        refs_list = []
+        labels_list = []
         for src, edits in zip(self.srcs, self.edits_list):
             all_edits = set(edits)
+            refs = []
+            labels = []
             for edit_set in itertools.combinations(edits, n):
                 edit_to_be_removed = set(edit_set)
                 edit_to_be_applied = all_edits - edit_to_be_removed
-                references.append(self.apply_edits(src, edit_to_be_applied))
+                refs.append(self.apply_edits(src, edit_to_be_applied))
                 labels.append([e.type for e in edit_to_be_removed])
+            refs_list.append(refs)
+            labels_list.append(labels)
         if return_labels:
-            assert len(references) == len(labels)
-            return references, labels
+            assert len(refs_list) == len(labels_list)
+            return refs_list, labels_list
         else:
-            return references
+            return refs_list
     
     def generate_corrected_srcs(
         self,
         n=1,
         return_labels: bool=False
-    ) -> Union[Tuple[List[str], List[List[str]]], List[str]]:
-        corrected = []
-        labels = []
+    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[str]]:
+        corrected_list = []
+        labels_list = []
         for src, edits in zip(self.srcs, self.edits_list):
+            corrected = []
+            labels = []
             for edit_set in itertools.combinations(edits, n):
                 corrected.append(self.apply_edits(src, edit_set))
                 labels.append([e.type for e in edit_set])
+            corrected_list.append(corrected)
+            labels_list.append(labels)
         if return_labels:
-            assert len(corrected) == len(labels)
-            return corrected, labels
+            assert len(corrected_list) == len(labels_list)
+            return corrected_list, labels_list
         else:
-            return corrected
+            return corrected_list
 
     @staticmethod
     def apply_edits(src: str, edits: List[Edit]) -> str:
@@ -261,23 +286,123 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
                 offset += len(e.c_str.split(' ')) - (e.o_end - e.o_start)
         trg = ' '.join(tokens).replace(' $DELETE', '').replace('$DELETE ', '').replace('$DELETE', '')
         return trg
+    
+    def convert_etype(self, t, cat=1):
+        # cat=1, M, R, U
+        # cat=2, e.g. DET, NOUN:NUM
+        # cat=3, M:DET, R:NOUN:NUM
+        if cat == 1:
+            return t[0]
+        elif cat == 2:
+            return t[2:]
+        else:
+            return t
+        
 
-    def ged_labels_sent(self) -> List[int]:
+    def ged_labels_sent(self, mode='bin', return_id=False) -> List[int]:
+        assert mode in self.GED_MODES
         labels = []
-        for s, t in zip(self.srcs, self.trgs):
+        label2id = self.get_ged_label2id(mode=mode)
+        for s, t, edits in zip(self.srcs, self.trgs, self.edits_list):
             if s == t:
-                labels.append(0)
+                label = ['CORRECT']
             else:
-                labels.append(1)
+                if mode == 'bin':
+                    label = ['INCORRECT']
+                else:
+                    cat = int(mode[-1])
+                    label = list(set(self.convert_etype(e.type, cat) for e in edits))
+            if return_id:
+                label = [label2id[l] for l in label]
+            labels.append(label)
+        assert len(labels) == len(self.srcs)
         return labels
 
-    def ged_labels_token(self) -> List[List[int]]:
+    def ged_labels_token(self, mode='bin', return_id=False) -> List[List[int]]:
+        assert mode in self.GED_MODES
         labels = []
+        label2id = self.get_ged_label2id(mode=mode)
         for s, edits in zip(self.srcs, self.edits_list):
-            label = [0] * len(s.split(' '))
+            label = ['CORRECT'] * len(s.split(' '))
             for e in edits:
+                st = e.o_start
+                en = e.o_end
                 if e.is_insert():
-                    continue
-                label[e.o_start:e.o_end] = [1] * (e.o_end - e.o_start)
+                    # If missing error, we assign an incorrect label to the token on the right of the span.
+                    # This follows [Yuan+ 21]'s strategy (Sec. 4.2): https://aclanthology.org/2021.emnlp-main.687.pdf
+                    st = e.o_end
+                    en = e.o_end + 1
+                if mode == 'bin':
+                    label[st:en] = ['INCORRECT'] * (en - st)
+                else:
+                    cat = int(mode[-1])
+                    t = self.convert_etype(e.type, cat)
+                    label[st:en] = [t] * (en - st)
+            if return_id:
+                label = [label2id[l] for l in label]
             labels.append(label)
+        assert len(labels) == len(self.srcs)
         return labels
+    
+    def get_ged_id2label(self, mode='bin'):
+        mru_cats = [
+            'ADJ',
+            'ADV',
+            'CONJ',
+            'CONTR',
+            'DET',
+            'NOUN',
+            'NOUN:POSS',
+            'OTHER',
+            'PART',
+            'PREP',
+            'PRON',
+            'PUNCT',
+            'VERB',
+            'VERB:FORM',
+            'VERB:TENSE',
+        ]
+        r_cats = [
+            'ADJ:FORM',
+            'MORPH',
+            'NOUN:INFL',
+            'NOUN:NUM',
+            'ORTH',
+            'SPELL',
+            'VERB:INFL',
+            'VERB:SVA',
+            'WO'
+        ]
+        cat1 = {0: 'CORRECT'}
+        cat2 = {0: 'CORRECT'}
+        cat3 = {0: 'CORRECT'}
+        for i, c in enumerate('MRU'):
+            cat1[i+1] = c
+        for i, c in enumerate(mru_cats + r_cats):
+            cat2[i+1] = c
+        idx = 1
+        for c1 in 'MRU':
+            for c2 in mru_cats:
+                cat3[idx] = c1 + ':' + c2
+                idx += 1
+            if c1 == 'R':
+                for c2 in r_cats:
+                    cat3[idx] = c1 + ':' + c2
+                    idx += 1
+        assert len(cat1) == 4
+        assert len(cat2) == 25
+        assert len(cat3) == 55
+
+        if mode == 'bin':
+            return {0: 'CORRECT', 1: 'INCORRECT'}
+        elif mode == 'cat1':
+            return cat1
+        elif mode == 'cat2':
+            return cat2
+        else:
+            return cat3
+    
+    def get_ged_label2id(self, mode='bin'):
+        id2label = self.get_ged_id2label(mode)
+        return {v:k for k, v in id2label.items()}
+        

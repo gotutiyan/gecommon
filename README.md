@@ -21,7 +21,7 @@ pip install -e .
 
 ### `from_parallel(src: str=None, trg: str=None) -> Parallel`
 
-Load dataset from parallel. Both `src=` and `trg=` are file paths.
+Load dataset raw text files.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_parallel(
@@ -30,9 +30,9 @@ gec = Parallel.from_parallel(
 )
 ```
 
-### `from_m2(m2: str=None, ref_id: int=0)`
+### `from_m2(m2: str=None, ref_id: int=0) -> Parallel`
 
-Load dataset from M2 format. Currently, `Parallel` cannot treat multiple references.
+Load dataset from M2 format file. Currently, `Parallel` cannot treat multiple references.
 
 ```python
 from gecommon import Parallel
@@ -42,7 +42,7 @@ gec = Parallel.from_m2(
 )
 ```
 
-### `from_demo()`
+### `from_demo() -> Parallel`
 
 Load demo data. This is to understand how to use (and is for debugging).
 ```python
@@ -58,13 +58,19 @@ A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 S This are gramamtical sentence .
+A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0
+A 2 2|||M:DET|||a|||REQUIRED|||-NONE-|||0
+A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
+A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
+
+S This are gramamtical sentence .
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 '''
 ```
 
-### `show_stats(cat3: bool=False)`
+### `show_stats(cat3: bool=False) -> None`
 Show statistics of dataset. E.g. the number of sentence, the word error rate.
 
 Also show combined error types such as `R:NOUN` if `cat3=True`.
@@ -91,64 +97,141 @@ VERB:SVA        1 33.33
 '''
 ```
 
-### `ged_labels_sent()`
+### `ged_labels_sent(mode: str = 'bin', return_id=False) -> List[List[Union[str, int]]]`
 
 Output sentence-level error detection labels.
 
-`1` means the source is incorrect, `0` means correct.
+- `mode=` indicates the type of detection labels.
+    - `mode='bin'` is 2-class labels, correct and incorrect.
+    - `mode='cat1'` is 4-class labels, correct, replacement, missing, and unnecessary.
+    - `mode='cat2'` is 25-class labels, correct and 24 labels without UNK of ERRANT's definition.
+    - `mode='cat3'` is 55-class labels, correct and 54 labels like `M:NOUN`. Refer to Appendix A in the [Bryant+ 17](https://aclanthology.org/P17-1074.pdf)
+- By default, this function returns labels as a string. If you want ids instead,  specify `return_ids=True`.
+
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
 print(gec.ged_labels_sent()) 
-# [1, 0]
+# [['INCORRECT'], ['INCORRECT'], ['CORRECT']]
+print(gec.ged_labels_sent(return_id=True))
+# [[1], [1], [0]] 
+print(gec.ged_labels_sent(mode='cat1'))
+# [['M', 'R'], ['M', 'R'], ['CORRECT']]
+print(gec.ged_labels_sent(mode='cat2'))
+# [['DET', 'VERB:SVA', 'SPELL'], ['DET', 'VERB:SVA', 'SPELL'], ['CORRECT']]
+print(gec.ged_labels_sent(mode='cat3'))
+# [['R:SPELL', 'M:DET', 'R:VERB:SVA'], ['R:SPELL', 'M:DET', 'R:VERB:SVA'], ['CORRECT']]
+print(gec.ged_labels_sent(mode='cat3', return_id=True))
+[[36, 5, 38], [36, 5, 38], [0]]
 ```
 
-### `ged_labels_token()`
-Output token-level error detection labels by ERRANT's alignments.
+### `ged_labels_token(mode: str = 'bin', return_id=False) -> List[List[List[Union[str, int]]]]`
+Output token-level error detection labels based on ERRANT's alignments.
+The behavior is the same as `ged_labels_sent()`.
 
-`1` means the token is incorrect, `0` means correct.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
 print(gec.ged_labels_token())
-# [[0, 1, 1, 0, 0], [0, 0, 0, 0, 0]]
+# [['CORRECT', 'INCORRECT', 'INCORRECT', 'CORRECT', 'CORRECT'], ['CORRECT', 'INCORRECT', 'INCORRECT', 'CORRECT', 'CORRECT'], ['CORRECT', 'CORRECT', 'CORRECT', 'CORRECT', 'CORRECT']]
+print(gec.ged_labels_token(return_id=True))
+# [[0, 1, 1, 0, 0], [0, 1, 1, 0, 0], [0, 0, 0, 0, 0]]
 ```
 
-### `generate_corrected_srcs(n: int=1, return_labels: bool=False)`
+### `generate_corrected_srcs(n: int=1, return_labels: bool=False) -> Union(List[List[str]], Tuple[List[List[str]], List[List[List[str]]]]`
 
 For each source--target pair, output the full set of correction sentences applying a subset of the $n$ corrections to the source. That is, if there are $N$ edits in total, ${}_N C_n$ sentences are generated for each pair.  
-The output is returned as a one-dimensional list with no pair boundaries.
+
+The output is two dimension list. The first dimension is the number of pairs, and the second one ${}_N C_n$.
 
 If `return_labels=True` is specified, labels are also returned to indicate which error type correction was applied.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
 print(gec.generate_corrected_srcs(n=1))
-# ['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .']
+# [['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .'],
+#  ['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .'],
+#  []]
 
 print(gec.generate_corrected_srcs(n=1, return_labels=True))
-# (['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .'], [['R:VERB:SVA'], ['M:DET'], ['R:SPELL']])
+# ([['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .'],
+#  ['This is gramamtical sentence .', 'This are a gramamtical sentence .', 'This are grammatical sentence .'],
+#  []],
+# [[['R:VERB:SVA'], ['M:DET'], ['R:SPELL']],
+#  [['R:VERB:SVA'], ['M:DET'], ['R:SPELL']],
+#  []]
+# )
 
 print(gec.generate_corrected_srcs(n=2, return_labels=True))
-# (['This is a gramamtical sentence .', 'This is grammatical sentence .', 'This are a grammatical sentence .'], [['R:VERB:SVA', 'M:DET'], ['R:VERB:SVA', 'R:SPELL'], ['M:DET', 'R:SPELL']])
+# ([['This is a gramamtical sentence .', 'This is grammatical sentence .', 'This are a grammatical sentence .'],
+#  ['This is a gramamtical sentence .', 'This is grammatical sentence .', 'This are a grammatical sentence .'],
+#  []],
+# [[['R:VERB:SVA', 'M:DET'], ['R:VERB:SVA', 'R:SPELL'], ['M:DET', 'R:SPELL']],
+#  [['R:VERB:SVA', 'M:DET'], ['R:VERB:SVA', 'R:SPELL'], ['M:DET', 'R:SPELL']],
+#  []]
+# )
 ```
 
-### `def generate_corrupted_refs(self, n: int=1, return_labels: bool=False):`
+### `def generate_corrupted_refs(self, n: int=1, return_labels: bool=False) -> Union(List[List[str]], Tuple[List[List[str]], List[List[List[str]]]]`
 For each source--target pair, output the full set of corrections that do not apply a subset of the $n$ corrections from the reference. That is, if there are $N$ edits in total, ${}_N C_n$ sentences are generated for each pair.  
-The output is returned as a one-dimensional list with no pair boundaries.
 
-If `return_labels=True` is specified, labels are also returned to indicate which error types were excluded.
+The output is two dimension list. The first dimension is the number of pairs, and the second one ${}_N C_n$.
+
+If `return_labels=True` is specified, labels are also returned to indicate which error types were corrupted.
 ```python
 from gecommon import Parallel
 gec = Parallel.from_demo()
 print(gec.generate_corrupted_refs(n=1))
-# ['This are a grammatical sentence .', 'This is grammatical sentence .', 'This is a gramamtical sentence .']
+# [['This are a grammatical sentence .', 'This is grammatical sentence .', 'This is a gramamtical sentence .'],
+#  ['This are a grammatical sentence .', 'This is grammatical sentence .', 'This are is gramamtical sentence .'],
+#  []]
 
 print(gec.generate_corrupted_refs(n=1, return_labels=True))
-# (['This are a grammatical sentence .', 'This is grammatical sentence .', 'This is a gramamtical sentence .'], [['R:VERB:SVA'], ['M:DET'], ['R:SPELL']])
+# ([['This are a grammatical sentence .', 'This is grammatical sentence .', 'This is a gramamtical sentence .'],
+# ['This are a grammatical sentence .', 'This is grammatical sentence .', 'This are is gramamtical sentence .'],
+# []],
+# [[['R:VERB:SVA'], ['M:DET'], ['R:SPELL']],
+# [['R:VERB:SVA'], ['M:DET'], ['R:SPELL']],
+# []]
+# )
+```
 
-print(gec.generate_corrupted_refs(n=2, return_labels=True))
-# (['This are grammatical sentence .', 'This are a gramamtical sentence .', 'This is gramamtical sentence .'], [['R:VERB:SVA', 'M:DET'], ['R:VERB:SVA', 'R:SPELL'], ['R:SPELL', 'M:DET']])
+### `def get_ged_id2label(mode='bin') -> Dict[int, str]`
+Return the id2label dictionary for error detection.
+
+- `mode=` indicates the type of detection labels.
+    - `mode='bin'` is 2-class labels, correct and incorrect.
+    - `mode='cat1'` is 4-class labels, correct, replacement, missing, and unnecessary.
+    - `mode='cat2'` is 25-class labels, correct and 24 labels without UNK of ERRANT's definition.
+    - `mode='cat3'` is 55-class labels, correct and 54 labels like `M:NOUN`. Refer to Appendix A in the [Bryant+ 17](https://aclanthology.org/P17-1074.pdf)
+
+```python
+from gecommon import Parallel
+gec = Parallel.from_demo()
+print(gec.get_ged_id2label(mode='bin'))
+# {0: 'CORRECT', 1: 'INCORRECT'}
+print(gec.get_ged_id2label(mode='cat1'))
+# {0: 'CORRECT', 1: 'M', 2: 'R', 3: 'U'}
+print(gec.get_ged_id2label(mode='cat2'))
+# {0: 'CORRECT', 1: 'ADJ', 2: 'ADV', 3: 'CONJ', 4: 'CONTR', ...
+print(gec.get_ged_id2label(mode='cat3'))
+# {0: 'CORRECT', 1: 'M:ADJ', 2: 'M:ADV', 3: 'M:CONJ', 4: 'M:CONTR', 5: 'M:DET', ... 
+```
+
+### `def get_ged_label2id(mode='bin') -> Dict[str, int]`
+Return the label2id dictionary for error detection.
+
+```python
+from gecommon import Parallel
+gec = Parallel.from_demo()
+print(gec.get_ged_label2id(mode='bin'))
+# {'CORRECT': 0, 'INCORRECT': 1}
+print(gec.get_ged_label2id(mode='cat1'))
+# {'CORRECT': 0, 'M': 1, 'R': 2, 'U': 3}
+print(gec.get_ged_label2id(mode='cat2'))
+# {'CORRECT': 0, 'ADJ': 1, 'ADV': 2, 'CONJ': 3, 'CONTR': 4, ...
+print(gec.get_ged_label2id(mode='cat3'))
+# {'CORRECT': 0, 'M:ADJ': 1, 'M:ADV': 2, 'M:CONJ': 3, 'M:CONTR': 4, 'M:DET': 5, ...
 ```
 
 # gecommon.Comparison
