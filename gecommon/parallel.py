@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, Dict
 from dataclasses import dataclass
 from collections import Counter
 import itertools
@@ -216,7 +216,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         self,
         n: int=1,
         return_labels: bool=False
-    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[str]]:
+    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[List[str]]]:
         '''
         Returns
             refs_list: List[List[str]], the size is (# of sources, # of currupted references).
@@ -249,7 +249,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         self,
         n=1,
         return_labels: bool=False
-    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[str]]:
+    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[List[str]]]:
         corrected_list = []
         labels_list = []
         for src, edits in zip(self.srcs, self.edits_list):
@@ -287,7 +287,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         trg = ' '.join(tokens).replace(' $DELETE', '').replace('$DELETE ', '').replace('$DELETE', '')
         return trg
     
-    def convert_etype(self, t, cat=1):
+    def convert_etype(self, t, cat=1) -> str:
         # cat=1, M, R, U
         # cat=2, e.g. DET, NOUN:NUM
         # cat=3, M:DET, R:NOUN:NUM
@@ -298,8 +298,11 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         else:
             return t
         
-
-    def ged_labels_sent(self, mode='bin', return_id=False) -> List[int]:
+    def ged_labels_sent(
+            self,
+            mode: str='bin',
+            return_id: bool=False
+        ) -> List[List[Union[str, int]]]:
         assert mode in self.GED_MODES
         labels = []
         label2id = self.get_ged_label2id(mode=mode)
@@ -318,7 +321,11 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         assert len(labels) == len(self.srcs)
         return labels
 
-    def ged_labels_token(self, mode='bin', return_id=False) -> List[List[int]]:
+    def ged_labels_token(
+            self,
+            mode: str='bin',
+            return_id: bool=False
+        ) -> List[List[List[Union[str, int]]]]:
         assert mode in self.GED_MODES
         labels = []
         label2id = self.get_ged_label2id(mode=mode)
@@ -344,7 +351,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         assert len(labels) == len(self.srcs)
         return labels
     
-    def get_ged_id2label(self, mode='bin'):
+    def get_ged_id2label(self, mode: str='bin') -> Dict[int, str]:
         mru_cats = [
             'ADJ',
             'ADV',
@@ -402,7 +409,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         else:
             return cat3
     
-    def get_ged_label2id(self, mode='bin'):
+    def get_ged_label2id(self, mode: str='bin') -> Dict[str, int]:
         id2label = self.get_ged_id2label(mode)
         return {v:k for k, v in id2label.items()}
         
