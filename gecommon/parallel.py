@@ -105,7 +105,9 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             src = src[2:]  # remove 'S '
             edits = [
                 self.make_edit_instance(e[2:]) for e in edits \
-                if not e.startswith('A -1') and int(e.split('|||')[-1]) == ref_id
+                if e.split('|||')[1] not in ['noop', 'UNK'] \
+                    and int(e.split('|||')[-1]) == ref_id \
+                    
             ]
             srcs.append(src)
             trgs.append(self.apply_edits(src, edits))
