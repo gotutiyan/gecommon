@@ -10,11 +10,13 @@ class Edit:
         self,
         o_start: int = None,
         o_end: int = None,
+        o_str: str = None,
         c_str: str = None,
         type: str = None
     ):
         self.o_start = o_start
         self.o_end = o_end
+        self.o_str = o_str
         self.c_str = c_str
         self.type = type
 
@@ -28,10 +30,10 @@ class Edit:
         return not self.is_delete() and self.o_start != self.o_end
 
     def __str__(self):
-        return f'Edit({self.o_start}, {self.o_end}, {self.c_str}, {self.type})'
+        return f'Edit({self.o_str} ({self.o_start}, {self.o_end}) -> {self.c_str}, {self.type})'
 
     def __repr__(self) -> str:
-        return f'Edit({self.o_start}, {self.o_end}, {self.c_str}, {self.type})'
+        return f'Edit({self.o_str} ({self.o_start}, {self.o_end}) -> {self.c_str}, {self.type})'
 
 class Parallel:
     def __init__(
@@ -67,17 +69,13 @@ class Parallel:
 A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0
 A 2 2|||M:DET|||a|||REQUIRED|||-NONE-|||0
 A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
-A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
-S This are gramamtical sentence .
-A 1 2|||R:VERB:SVA|||is|||REQUIRED|||-NONE-|||0
-A 2 2|||M:DET|||a|||REQUIRED|||-NONE-|||0
-A 2 3|||R:SPELL|||grammatical|||REQUIRED|||-NONE-|||0
-A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
+S This is are a gram matical sentence .
+A 2 3|||U:VERB||||||REQUIRED|||-NONE-|||0
+A 4 6|||R:ORTH|||grammatical|||REQUIRED|||-NONE-|||0
 
 S This are gramamtical sentence .
 A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
-A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
 
 '''.rstrip().split('\n\n')
         return cls(m2=m2)
@@ -104,7 +102,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             src, *edits = content.split('\n')
             src = src[2:]  # remove 'S '
             edits = [
-                self.make_edit_instance(e[2:]) for e in edits \
+                self.make_edit_instance(src, e[2:]) for e in edits \
                 if e.split('|||')[1] not in ['noop', 'UNK'] \
                     and int(e.split('|||')[-1]) == ref_id \
                     
@@ -127,12 +125,14 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         return srcs, trgs, edits_list
 
     @staticmethod
-    def make_edit_instance(editstr: str) -> Edit:
+    def make_edit_instance(src, editstr: str) -> Edit:
+        tokens = src.split(' ')
         pos, etype, c_str, *others = editstr.split('|||')
         start, end = map(int, pos.split(' '))
         return Edit(
             o_start=start,
             o_end=end,
+            o_str=' '.join(tokens[start:end]),
             c_str=c_str,
             type=etype
         )
@@ -173,6 +173,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
         return Edit(
             o_start=edit.o_start,
             o_end=edit.o_end,
+            o_str=edit.o_str,
             c_str=edit.c_str,
             type=edit.type
         )
@@ -213,60 +214,66 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||1
             show(cat2, num_edits)
         else:
             show(cat3, num_edits)
+
+    def n_edits_distribution(self) -> Tuple:
+        n_errors = [len(edits) for edits in self.edits_list]
+        n_error_to_freq = Counter(n_errors)
+        return sorted(n_error_to_freq.items(), key=lambda x:x[0])
     
     def generate_corrupted_refs(
         self,
-        n: int=1,
-        return_labels: bool=False
-    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[List[str]]]:
+        n: int=1
+    ) -> List[List[Dict]]:
         '''
-        Returns
-            refs_list: List[List[str]], the size is (# of sources, # of currupted references).
-                Note that the second dimension is different depending on sources.
-
-            labels_list: List[List[List[str]]], the size is (# of sources, # of currupted references, # of labels)
-                Note that the second dimension is different depending on sources.
-                And the third dimension is the same as n.
+        Returns: List[List[Dict]] is formed (num_sents, num_errors in the sents, Dict).
+        A dict includes the keys: 'ref', 'labels', 'ids'. 
+            - 'ref' is a corrupted reference
+            - 'labels' are the error types of the corrupted edits
+            - 'ids' are the indices of the corrupted edits
         '''
         refs_list = []
-        labels_list = []
         for src, edits in zip(self.srcs, self.edits_list):
+            edits_with_ids = list(enumerate(edits))
             all_edits = set(edits)
-            refs = []
-            labels = []
-            for edit_set in itertools.combinations(edits, n):
-                edit_to_be_removed = set(edit_set)
+            current_ref_list = []
+            for edit_set in itertools.combinations(edits_with_ids, n):
+                data = dict()
+                ids = [e[0] for e in edit_set]
+                edit = [e[1] for e in edit_set]
+                edit_to_be_removed = set(edit)
                 edit_to_be_applied = all_edits - edit_to_be_removed
-                refs.append(self.apply_edits(src, edit_to_be_applied))
-                labels.append([e.type for e in edit_to_be_removed])
-            refs_list.append(refs)
-            labels_list.append(labels)
-        if return_labels:
-            assert len(refs_list) == len(labels_list)
-            return refs_list, labels_list
-        else:
-            return refs_list
+                data['ref'] = self.apply_edits(src, edit_to_be_applied)
+                data['labels'] = [e.type for e in edit_to_be_removed]
+                data['ids'] = ids
+                current_ref_list.append(data)
+            refs_list.append(current_ref_list)
+        return refs_list
     
     def generate_corrected_srcs(
         self,
-        n=1,
-        return_labels: bool=False
-    ) -> Union[Tuple[List[List[str]], List[List[List[str]]]], List[List[str]]]:
+        n=1
+    ) -> List[List[Dict]]:
+        '''
+        Returns: List[List[Dict]] is formed (num_sents, num_errors in the sents, Dict).
+        A dict includes the keys: 'ref', 'labels', 'ids'. 
+            - 'corrected' is a corrected sentence
+            - 'labels' are the error types of the corrected edits
+            - 'ids' are the indices of the corredcted edits
+        '''
         corrected_list = []
-        labels_list = []
         for src, edits in zip(self.srcs, self.edits_list):
-            corrected = []
-            labels = []
-            for edit_set in itertools.combinations(edits, n):
-                corrected.append(self.apply_edits(src, edit_set))
-                labels.append([e.type for e in edit_set])
-            corrected_list.append(corrected)
-            labels_list.append(labels)
-        if return_labels:
-            assert len(corrected_list) == len(labels_list)
-            return corrected_list, labels_list
-        else:
-            return corrected_list
+            edits_with_ids = list(enumerate(edits))
+            current_corrected_list = []
+            for edit_set in itertools.combinations(edits_with_ids, n):
+                data = dict()
+                ids = [e[0] for e in edit_set]
+                edit = [e[1] for e in edit_set]
+                data['corrected'] = self.apply_edits(src, edit)
+                data['labels'] = [e.type for e in edit]
+                data['ids'] = ids
+                current_corrected_list.append(data)
+            corrected_list.append(current_corrected_list)
+        return corrected_list
 
     @staticmethod
     def apply_edits(src: str, edits: List[Edit]) -> str:
