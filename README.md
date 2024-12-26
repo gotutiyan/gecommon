@@ -1,19 +1,36 @@
 # GECOMMON: A common toolkit for Grammatical Error Correcion
 
-This is a common toolkit for Grammatical Error Correction (GEC).
+You can install from PyPi:
+```
+pip install gecommon
+python -m spacy download en_core_web_sm
+```
 
-Install by:
+Or, from github:
 ```
 git clone https://github.com/gotutiyan/gecommon.git
 cd gecommon
-pip install -e .
+pip install -e ./
+python -m spacy download en_core_web_sm
 ```
 
 # Features
-- [Parallel](https://github.com/gotutiyan/gecommon#gecommonparallel) ([docs](./docs/parallel.md)): A class to do some operations with parallel data. E.g. make error detection labels, generate corrupt references.
-- [Comparison](https://github.com/gotutiyan/gecommon#gecommoncomparison) ([docs](./docs/comparison.md)): A class to compare evaluation results of ERRANT.
+- CachedERRANT: Class to use ERRANT faster by caching.
+- [Parallel](https://github.com/gotutiyan/gecommon#gecommonparallel) ([docs](./docs/parallel.md)): Class to handle parallel and M2 format in the same interface.
+
 
 # Use cases
+
+### gecommon.CachedERRANT
+You can replace `parse()` and `annotate()` of original ERRANT with `.extract_edits()`.  
+This also caches the results of `parse()` and `annotate()`, thus it works faster when processing the same sentence or parallel sentence two or more times.
+
+```python
+from gecommon import CachedERRANT
+errant = CachedERRANT()
+edits = errant.extract_edits('This is a sample sentences .', 'These are sample sentences .')
+print(edits)
+```
 
 ### gecommon.Parallel
 
@@ -32,22 +49,15 @@ gec = Parallel.from_parallel(
     trg=<a trg file path>
 )
 # After that, you can handle the input data in the same interface.
-```
-
-- To convert a M2 file into parallel format
-```python
-from gecommon import Parallel
-gec = Parallel.from_m2(
-    m2=<a m2 file path>,
-    ref_id=0
-)
-gec.srcs  # sources
-gec.trgs  # targets
+assert gec.srcs is not None
+assert gec.trgs is not None
+assert gec.edits_list is not None
 ```
 
 - To generate error detection labels
     - You can use not only binary labels but also 4-class, 25-class, 55-class like [[Yuan+ 21]](https://aclanthology.org/2021.emnlp-main.687/).
 ```python
+from gecommon import Parallel
 gec = Parallel.from_demo()
 # Sentence-level labels
 print(gec.ged_labels_sent()) 
@@ -55,14 +65,16 @@ print(gec.ged_labels_sent())
 
 # Token-level labels
 print(gec.ged_labels_token(mode='cat3'))
-# [['CORRECT', 'INCORRECT', 'INCORRECT', 'CORRECT', 'CORRECT'],
-#  ['CORRECT', 'CORRECT', 'INCORRECT', 'CORRECT', 'INCORRECT', 'INCORRECT', 'CORRECT', 'CORRECT'],
-#  ['CORRECT', 'CORRECT', 'CORRECT', 'CORRECT', 'CORRECT']]
+# [['CORRECT', 'R:VERB:SVA', 'R:SPELL', 'CORRECT', 'CORRECT'],
+# ['CORRECT', 'CORRECT', 'U:VERB', 'CORRECT', 'R:ORTH', 'R:ORTH', 'CORRECT', 'CORRECT'],
+# ['CORRECT', 'CORRECT', 'CORRECT', 'CORRECT', 'CORRECT']]
 ```
 
 - To use edits information
     - This is useful for pre-processing that requires editing information, like [[Chen+ 20]](https://aclanthology.org/2020.emnlp-main.581/), [[Li+ 23]](https://aclanthology.org/2023.acl-long.380/) and [[Bout+ 23]](https://aclanthology.org/2023.emnlp-main.355/).
 ```python
+from gecommon import Parallel
+gec = Parallel.from_demo()
 for edits in gec.edits_list:
     for e in edits:
         print(e.o_start, e.o_end, e.c_str)
@@ -76,26 +88,4 @@ for edits in gec.edits_list:
 # 4 6 grammatical
 # ---
 # ---
-```
-
-- To generate corrected sentences with some corrections applied (like [[PT-M2]](https://aclanthology.org/2022.emnlp-main.463/)), or reference sentences with some corrections excluded (like [[IMPARA]](https://aclanthology.org/2022.coling-1.316/)).
-
-```python
-from gecommon import Parallel
-gec = Parallel.from_demo()
-print(gec.generate_corrected_srcs(n=1))
-# [[{'corrected': 'This is gramamtical sentence .', 'labels': ['R:VERB:SVA'], 'ids': [0]},
-#   {'corrected': 'This are a gramamtical sentence .', 'labels': ['M:DET'], 'ids': [1]},
-#   {'corrected': 'This are grammatical sentence .', 'labels': ['R:SPELL'], 'ids': [2]}],
-# [{'corrected': 'This is a gram matical sentence .', 'labels': ['U:VERB'], 'ids': [0]},
-# {'corrected': 'This is are a grammatical sentence .', 'labels': ['R:ORTH'], 'ids': [1]}],
-# []]
-
-print(gec.generate_corrupted_refs(n=1))
-# [[{'ref': 'This are a grammatical sentence .', 'labels': ['R:VERB:SVA'], 'ids': [0]},
-#   {'ref': 'This is grammatical sentence .', 'labels': ['M:DET'], 'ids': [1]},
-#   {'ref': 'This is a gramamtical sentence .', 'labels': ['R:SPELL'], 'ids': [2]}],
-# [{'ref': 'This is are a grammatical sentence .', 'labels': ['U:VERB'], 'ids': [0]},
-#  {'ref': 'This is a gram matical sentence .', 'labels': ['R:ORTH'], 'ids': [1]}],
-# []]
 ```

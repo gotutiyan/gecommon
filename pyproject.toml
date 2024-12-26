@@ -1,21 +1,28 @@
-[build-system]
-requires = ["setuptools", "setuptools-scm"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "gecommon"
-version = "0.1"
-authors = [
-    {name = "Takumi Goto"},
-]
+version = "0.1.0"
 description = "A common toolkit for Grammatical Error Correction"
-license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.8"
+authors = [
+    { name = "gotuiyan" }
+]
+requires-python = ">=3.11.0"
 dependencies = [
-    "errant >= 2.3.3",
-    "matplotlib >= 3.8.0"
+    "errant>=3.0.0",
 ]
 
-[tool.setuptools]
-packages = ["gecommon"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "ruff>=0.8.4",
+]
+
+[project.scripts]
+gecommon-m2-to-raw = "gecommon.cli.m2_to_raw:main"

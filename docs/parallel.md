@@ -1,10 +1,9 @@
 # gecommon.Parallel
 
-`Parallel` contains processing when paralle data is used.
-
 ### `from_parallel(src: str=None, trg: str=None) -> Parallel`
 
-Load dataset raw text files.
+Load dataset from raw text files.
+
 ```python
 from gecommon import Parallel
 gec = Parallel.from_parallel(
@@ -15,7 +14,7 @@ gec = Parallel.from_parallel(
 
 ### `from_m2(m2: str=None, ref_id: int=0) -> Parallel`
 
-Load dataset from M2 format file. Currently, `Parallel` cannot treat multiple references.
+Load dataset from a M2 file.
 
 ```python
 from gecommon import Parallel
@@ -91,8 +90,8 @@ Output sentence-level error detection labels.
     - `mode='bin'` is 2-class labels, correct and incorrect.
     - `mode='cat1'` is 4-class labels, correct, replacement, missing, and unnecessary.
     - `mode='cat2'` is 25-class labels, correct and 24 labels without UNK of ERRANT's definition.
-    - `mode='cat3'` is 55-class labels, correct and 54 labels like `M:NOUN`. Refer to Appendix A in the [Bryant+ 17](https://aclanthology.org/P17-1074.pdf)
-- By default, this function returns labels as a string. If you want ids instead,  specify `return_ids=True`.
+    - `mode='cat3'` is 55-class labels, correct and 54 labels like `M:NOUN`. Refer to Appendix A in the [Bryant+ 17](https://aclanthology.org/P17-1074.pdf).
+- By default, this function returns labels as string. If you want ids instead, specify `return_id=True`.
 
 ```python
 from gecommon import Parallel
@@ -126,65 +125,6 @@ print(gec.ged_labels_token(return_id=True))
 # [[0, 1, 1, 0, 0],
 #  [0, 0, 1, 0, 1, 1, 0, 0],
 #  [0, 0, 0, 0, 0]]
-```
-
-### `generate_corrected_srcs(n: int=1, return_labels: bool=False) -> List[List[Dict]]`
-
-For each source--target pair, output the full set of correction sentences applying a subset of the $n$ corrections to the source. That is, if there are $N$ edits in total, ${}_N C_n$ sentences are generated for each pair.  
-
-It returns: List[List[Dict]] is formed (num_sents, ${}_N C_n$, Dict).  
-A dict includes the keys: 'ref', 'labels', 'ids'. 
-- 'ref' is a corrupted reference
-- 'labels' are the error types of the corrupted edits
-- 'ids' are the indices of the corrupted edits
-
-If `return_labels=True` is specified, labels are also returned to indicate which error type correction was applied.
-```python
-from gecommon import Parallel
-gec = Parallel.from_demo()
-print(gec.generate_corrected_srcs(n=1))
-# [[{'corrected': 'This is gramamtical sentence .', 'labels': ['R:VERB:SVA'], 'ids': [0]},
-#   {'corrected': 'This are a gramamtical sentence .', 'labels': ['M:DET'], 'ids': [1]},
-#   {'corrected': 'This are grammatical sentence .', 'labels': ['R:SPELL'], 'ids': [2]}],
-# [{'corrected': 'This is a gram matical sentence .', 'labels': ['U:VERB'], 'ids': [0]},
-# {'corrected': 'This is are a grammatical sentence .', 'labels': ['R:ORTH'], 'ids': [1]}],
-# []]
-
-print(gec.generate_corrected_srcs(n=2))
-# [[{'corrected': 'This is a gramamtical sentence .', 'labels': ['R:VERB:SVA', 'M:DET'], 'ids': [0, 1]},
-#   {'corrected': 'This is grammatical sentence .', 'labels': ['R:VERB:SVA', 'R:SPELL'], 'ids': [0, 2]},
-#   {'corrected': 'This are a grammatical sentence .', 'labels': ['M:DET', 'R:SPELL'], 'ids': [1, 2]}], 
-# [{'corrected': 'This is a grammatical sentence .', 'labels': ['U:VERB', 'R:ORTH'], 'ids': [0, 1]}],
-# []]
-```
-
-### `def generate_corrupted_refs(self, n: int=1, return_labels: bool=False) -> List[List[Dict]]`
-For each source--target pair, output the full set of corrections that do not apply a subset of the $n$ corrections from the reference. That is, if there are $N$ edits in total, ${}_N C_n$ sentences are generated for each pair.  
-
-It returns: List[List[Dict]] is formed (num_sents, ${}_N C_n$, Dict).  
-A dict includes the keys: 'ref', 'labels', 'ids'. 
-- 'corrected' is a corrected sentence
-- 'labels' are the error types of the corrected edits
-- 'ids' are the indices of the corredcted edits
-
-If `return_labels=True` is specified, labels are also returned to indicate which error types were corrupted.
-```python
-from gecommon import Parallel
-gec = Parallel.from_demo()
-print(gec.generate_corrupted_refs(n=1))
-# [[{'ref': 'This are a grammatical sentence .', 'labels': ['R:VERB:SVA'], 'ids': [0]},
-#   {'ref': 'This is grammatical sentence .', 'labels': ['M:DET'], 'ids': [1]},
-#   {'ref': 'This is a gramamtical sentence .', 'labels': ['R:SPELL'], 'ids': [2]}],
-# [{'ref': 'This is are a grammatical sentence .', 'labels': ['U:VERB'], 'ids': [0]},
-#  {'ref': 'This is a gram matical sentence .', 'labels': ['R:ORTH'], 'ids': [1]}],
-# []]
-
-print(gec.generate_corrupted_refs(n=2))
-# [[{'ref': 'This are grammatical sentence .', 'labels': ['M:DET', 'R:VERB:SVA'], 'ids': [0, 1]},
-#   {'ref': 'This are a gramamtical sentence .', 'labels': ['R:SPELL', 'R:VERB:SVA'], 'ids': [0, 2]},
-#   {'ref': 'This is gramamtical sentence .', 'labels': ['R:SPELL', 'M:DET'], 'ids': [1, 2]}],
-# [{'ref': 'This is are a gram matical sentence .', 'labels': ['R:ORTH', 'U:VERB'], 'ids': [0, 1]}],
-# []]
 ```
 
 ### `def get_ged_id2label(mode='bin') -> Dict[int, str]`
