@@ -2,37 +2,24 @@ from typing import List, Tuple, Optional, Union, Dict
 from collections import Counter
 import errant
 from tqdm import tqdm
+from .utils import apply_edits
 
 
-class Edit:
+class Edit(errant.edit.Edit):
+    """Wrap class for initialization that does not require a spacy object."""
+
     def __init__(
-        self,
-        o_start: int = None,
-        o_end: int = None,
-        o_str: str = None,
-        c_str: str = None,
-        type: str = None,
+        self, o_start, o_end, o_str, c_str, c_start=None, c_end=None, type="NA"
     ):
         self.o_start = o_start
         self.o_end = o_end
         self.o_str = o_str
+        self.o_toks = self.o_str.split(" ")
+        self.c_start = c_start
+        self.c_end = c_end
         self.c_str = c_str
+        self.c_toks = self.c_str.split(" ")
         self.type = type
-
-    def is_insert(self):
-        return self.o_start == self.o_end
-
-    def is_delete(self):
-        return self.c_str == ""
-
-    def is_replace(self):
-        return not self.is_delete() and self.o_start != self.o_end
-
-    def __str__(self):
-        return f"Edit({self.o_str} ({self.o_start}, {self.o_end}) -> {self.c_str}, {self.type})"
-
-    def __repr__(self) -> str:
-        return f"Edit({self.o_str} ({self.o_start}, {self.o_end}) -> {self.c_str}, {self.type})"
 
 
 class Parallel:
@@ -135,7 +122,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
 
         srcs: List[str] = []
         trgs: List[str] = []
-        edits_list: List[List[Edit]] = []
+        edits_list: List[List[errant.edit.Edit]] = []
         num_error_sent = 0
         num_words = 0
         num_edits = 0
@@ -150,7 +137,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
                 and int(e.split("|||")[-1]) == ref_id
             ]
             srcs.append(src)
-            trgs.append(self.apply_edits(src, edits))
+            trgs.append(apply_edits(src, edits))
             edits_list.append(edits)
             num_words += len(src.split(" "))
             num_edits += len(edits)
@@ -166,7 +153,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
 
     @staticmethod
     def make_edit_instance(src, editstr: str) -> Edit:
-        """Make Edit instance from a edit string of the M2 format,
+        """Make an Edit instance from an edit string of the M2 format,
             such as "S 0 1|||..."
 
         Args:
@@ -212,7 +199,6 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
             orig = annotator.parse(src)
             cor = annotator.parse(trg)
             edits = annotator.annotate(orig, cor)
-            edits = [self.convert_my_edit(e) for e in edits]
             edits_list.append(edits)
             num_words += len(src.split(" "))
             num_edits += len(edits)
@@ -225,24 +211,6 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
         self.num_edits = num_edits
         self.num_corrected_token = num_corrected_token
         return srcs, trgs, edits_list
-
-    @staticmethod
-    def convert_my_edit(edit: errant.edit.Edit) -> Edit:
-        """Convert errant Edit instance into our Edit instance.
-
-        Args:
-            edit (errant.edit.Edit): ERRANT Edit instance.
-
-        Returns:
-            Edit: our edit instance.
-        """
-        return Edit(
-            o_start=edit.o_start,
-            o_end=edit.o_end,
-            o_str=edit.o_str,
-            c_str=edit.c_str,
-            type=edit.type,
-        )
 
     def show_stats(self, cat3: bool = False) -> None:
         """Show statistics of the loaded dataset.
@@ -305,41 +273,6 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
         n_errors = [len(edits) for edits in self.edits_list]
         n_error_to_freq = Counter(n_errors)
         return sorted(n_error_to_freq.items(), key=lambda x: x[0])
-
-    @staticmethod
-    def apply_edits(src: str, edits: List[Edit]) -> str:
-        """Generate corrected sentence after applying the edits.
-
-        Args:
-            src (str): Source sentence.
-            edits: (list[Edit]): Edit sequence.
-
-        Returns:
-            str: The corrected sentence.
-        """
-        offset = 0
-        tokens = src.split(" ")
-        for e in edits:
-            if e.o_start == -1:
-                continue
-            s_idx = e.o_start + offset
-            e_idx = e.o_end + offset
-            if e.is_delete():
-                tokens[s_idx:e_idx] = ["$DELETE"]
-                offset -= (e.o_end - e.o_start) - 1
-            elif e.is_insert():
-                tokens[s_idx:e_idx] = e.c_str.split(" ")
-                offset += len(e.c_str.split())
-            else:
-                tokens[s_idx:e_idx] = e.c_str.split(" ")
-                offset += len(e.c_str.split(" ")) - (e.o_end - e.o_start)
-        trg = (
-            " ".join(tokens)
-            .replace(" $DELETE", "")
-            .replace("$DELETE ", "")
-            .replace("$DELETE", "")
-        )
-        return trg
 
     def convert_etype(self, etype, cat=1) -> str:
         """Convert error type into specific format.
@@ -426,7 +359,7 @@ A -1 -1|||noop|||-NONE-|||REQUIRED|||-NONE-|||0
             for e in edits:
                 st = e.o_start
                 en = e.o_end
-                if e.is_insert():
+                if e.o_start == e.o_end:
                     # If missing error, we assign an incorrect label to the token on the right of the span.
                     # This follows [Yuan+ 21]'s strategy (Sec. 4.2): https://aclanthology.org/2021.emnlp-main.687.pdf
                     st = e.o_end

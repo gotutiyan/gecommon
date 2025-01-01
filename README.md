@@ -15,8 +15,9 @@ python -m spacy download en_core_web_sm
 ```
 
 # Features
-- CachedERRANT: Class to use ERRANT faster by caching.
-- [Parallel](https://github.com/gotutiyan/gecommon#gecommonparallel) ([docs](./docs/parallel.md)): Class to handle parallel and M2 format in the same interface.
+- `gecommon.CachedERRANT`: Class to use ERRANT faster by caching.
+- [gecommon.Parallel](https://github.com/gotutiyan/gecommon#gecommonparallel) ([docs](./docs/parallel.md)): Class to handle parallel and M2 format in the same interface.
+- `gecommon.utils.apply_edits`: A function to apply an errant.edit.Edit sequence to a sentence.
 
 
 # Use cases
