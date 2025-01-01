@@ -4,8 +4,10 @@ import spacy
 
 
 class CachedERRANT:
-    def __init__(self):
-        self.errant = errant.load("en")
+    """The efficent version of ERRANT.Annotator"""
+
+    def __init__(self, lang="en"):
+        self.errant = errant.load(lang)
         self.cache_parse = dict()
         self.cache_annotate = dict()
 
